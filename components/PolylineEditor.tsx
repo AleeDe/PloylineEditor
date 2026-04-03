@@ -289,6 +289,20 @@ export function PolylineEditor() {
     });
   }, []);
 
+  const refreshEditor = useCallback(() => {
+    applyChange(() => []);
+    setActivePolylineId(null);
+    setNewPolylineOnClick(true);
+    setClosest(null);
+    setHover(null);
+    setDragging(null);
+    setPanning(null);
+    setQuit(false);
+    setCamera({ scale: 1, offsetX: 0, offsetY: 0 });
+    setFx({ x: 30, y: 30, key: Date.now() });
+    setMode('refresh');
+  }, [applyChange]);
+
   const undo = useCallback(() => {
     if (past.length === 0) {
       return;
@@ -412,7 +426,8 @@ export function PolylineEditor() {
       }
 
       if (maybeMode === 'refresh') {
-        setFx((prevFx) => ({ x: prevFx?.x ?? 30, y: prevFx?.y ?? 30, key: Date.now() }));
+        refreshEditor();
+        return;
       }
 
       setQuit(false);
@@ -421,7 +436,7 @@ export function PolylineEditor() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [closest, mode, redo, undo, applyChange, enterQuitMode, endBeginOrInsertToMove]);
+  }, [closest, mode, redo, undo, enterQuitMode, endBeginOrInsertToMove, refreshEditor]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -949,7 +964,7 @@ export function PolylineEditor() {
           <ControlButton icon={Eraser} label="Delete" shortcut="D" active={mode === 'delete'} onClick={() => setMode('delete')} disabled={quit} />
           <ControlButton icon={Grab} label="Move" shortcut="M" active={mode === 'move'} onClick={() => setMode('move')} disabled={quit} />
           <ControlButton icon={Hand} label="Hand" shortcut="H" active={mode === 'hand'} onClick={() => setMode('hand')} disabled={quit} />
-          <ControlButton icon={RefreshCw} label="Refresh" shortcut="R" active={mode === 'refresh'} onClick={() => setMode('refresh')} disabled={quit} />
+          <ControlButton icon={RefreshCw} label="Refresh" shortcut="R" active={mode === 'refresh'} onClick={refreshEditor} disabled={quit} />
           <ControlButton icon={XCircle} label="Quit" shortcut="Q" active={mode === 'quit'} onClick={enterQuitMode} />
           <ControlButton icon={GitBranchPlus} label="Insert" shortcut="I" active={mode === 'insert'} onClick={() => setMode('insert')} disabled={quit} />
           <div className="col-span-1 flex min-h-12 flex-wrap items-center justify-center gap-2 border-4 border-black bg-white px-3 py-2 sm:col-span-2 md:col-span-4 lg:col-span-1 dark:border-white dark:bg-[#151721]">

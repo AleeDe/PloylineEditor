@@ -141,9 +141,11 @@ export function PolylineEditor() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
   const [mode, setMode] = useState<EditorMode>('begin');
   const [theme, setTheme] = useState<Theme>('light');
   const [polys, setPolys] = useState<Polyline[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [hover, setHover] = useState<Point2D | null>(null);
   const [closest, setClosest] = useState<ClosestVertex>(null);
   const [dragging, setDragging] = useState<{ polyIndex: number; vertexIndex: number } | null>(null);
@@ -290,18 +292,29 @@ export function PolylineEditor() {
   }, []);
 
   const refreshEditor = useCallback(() => {
-    applyChange(() => []);
-    setActivePolylineId(null);
-    setNewPolylineOnClick(true);
-    setClosest(null);
-    setHover(null);
-    setDragging(null);
-    setPanning(null);
     setQuit(false);
-    setCamera({ scale: 1, offsetX: 0, offsetY: 0 });
+    setIsRefreshing(true);
     setFx({ x: 30, y: 30, key: Date.now() });
     setMode('refresh');
-  }, [applyChange]);
+
+    if (refreshTimerRef.current !== null) {
+      window.clearTimeout(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = window.setTimeout(() => {
+      setIsRefreshing(false);
+      setMode('hand');
+      refreshTimerRef.current = null;
+    }, 220);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+      }
+    };
+  }, []);
 
   const undo = useCallback(() => {
     if (past.length === 0) {
@@ -484,7 +497,9 @@ export function PolylineEditor() {
       ctx.stroke();
     }
 
-    polys.forEach((poly, polyIndex) => {
+    const visiblePolys = isRefreshing ? [] : polys;
+
+    visiblePolys.forEach((poly, polyIndex) => {
       if (poly.vertices.length === 0) {
         return;
       }
@@ -526,7 +541,7 @@ export function PolylineEditor() {
       });
     });
 
-    if (mode === 'begin' && hover && activePolylineId) {
+    if (mode === 'begin' && hover && activePolylineId && !isRefreshing) {
       const activePolyline = polys.find((poly) => poly.id === activePolylineId);
       const lastVertex = activePolyline?.vertices[activePolyline.vertices.length - 1];
       if (lastVertex && !newPolylineOnClick && !activePolyline?.closed) {
@@ -551,7 +566,7 @@ export function PolylineEditor() {
       ctx.lineWidth = 5;
       ctx.stroke();
     }
-  }, [activePolylineId, camera, closest, fx, hover, mode, newPolylineOnClick, polys, screenToWorld, size, theme, worldToScreen]);
+  }, [activePolylineId, camera, closest, fx, hover, isRefreshing, mode, newPolylineOnClick, polys, screenToWorld, size, theme, worldToScreen]);
 
   const screenPointFromEvent = (event: { currentTarget: EventTarget & HTMLCanvasElement; clientX: number; clientY: number }) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -869,8 +884,10 @@ export function PolylineEditor() {
 
   const nearestVertex = closest && closest.dist <= SNAP_DISTANCE ? polys[closest.polyIndex]?.vertices[closest.vertexIndex] : null;
 
+  const displayPolys = isRefreshing ? [] : polys;
+
   const miniMap = useMemo(() => {
-    const points = polys.flatMap((poly) => poly.vertices.map((vertex) => projectVertex(vertex)));
+    const points = displayPolys.flatMap((poly) => poly.vertices.map((vertex) => projectVertex(vertex)));
     const viewportMin = screenToWorld({ x: 0, y: 0 });
     const viewportMax = screenToWorld({ x: size.width, y: size.height });
     if (points.length === 0) {
@@ -918,7 +935,7 @@ export function PolylineEditor() {
         h: Math.abs(viewportBottomRight.y - viewportTopLeft.y),
       },
     };
-  }, [polys, screenToWorld, size.height, size.width]);
+  }, [displayPolys, screenToWorld, size.height, size.width]);
 
   const onMiniMapClick = (event: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
     if (!Number.isFinite(miniMap.scale) || miniMap.scale <= 0) {
@@ -1056,7 +1073,7 @@ export function PolylineEditor() {
                 className="cursor-pointer"
               >
                 <rect x={0} y={0} width={miniMap.width} height={miniMap.height} fill={theme === 'dark' ? '#0B0C10' : '#f7f7f7'} />
-                {polys.map((poly) => {
+                {displayPolys.map((poly) => {
                   const points = poly.vertices.map((vertex) => {
                     const p = miniMap.mapPoint(projectVertex(vertex));
                     return `${p.x},${p.y}`;

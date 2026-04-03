@@ -214,15 +214,17 @@ export function PolylineEditor() {
     return () => observer.disconnect();
   }, []);
 
+  const visiblePolys = useMemo(() => (isRefreshing ? [] : polys), [isRefreshing, polys]);
+
   const selectedVertexCount = useMemo(() => {
-    if (closest) {
-      return polys[closest.polyIndex]?.vertices.length ?? 0;
-    }
     if (!activePolylineId) {
+      if (closest) {
+        return visiblePolys[closest.polyIndex]?.vertices.length ?? 0;
+      }
       return 0;
     }
-    return polys.find((poly) => poly.id === activePolylineId)?.vertices.length ?? 0;
-  }, [activePolylineId, closest, polys]);
+    return visiblePolys.find((poly) => poly.id === activePolylineId)?.vertices.length ?? 0;
+  }, [activePolylineId, closest, visiblePolys]);
 
   const worldToScreen = useCallback(
     (point: Point2D): Point2D => ({
@@ -496,8 +498,6 @@ export function PolylineEditor() {
       ctx.lineTo(size.width, sy);
       ctx.stroke();
     }
-
-    const visiblePolys = isRefreshing ? [] : polys;
 
     visiblePolys.forEach((poly, polyIndex) => {
       if (poly.vertices.length === 0) {
@@ -884,10 +884,8 @@ export function PolylineEditor() {
 
   const nearestVertex = closest && closest.dist <= SNAP_DISTANCE ? polys[closest.polyIndex]?.vertices[closest.vertexIndex] : null;
 
-  const displayPolys = isRefreshing ? [] : polys;
-
   const miniMap = useMemo(() => {
-    const points = displayPolys.flatMap((poly) => poly.vertices.map((vertex) => projectVertex(vertex)));
+    const points = visiblePolys.flatMap((poly) => poly.vertices.map((vertex) => projectVertex(vertex)));
     const viewportMin = screenToWorld({ x: 0, y: 0 });
     const viewportMax = screenToWorld({ x: size.width, y: size.height });
     if (points.length === 0) {
@@ -935,7 +933,7 @@ export function PolylineEditor() {
         h: Math.abs(viewportBottomRight.y - viewportTopLeft.y),
       },
     };
-  }, [displayPolys, screenToWorld, size.height, size.width]);
+  }, [visiblePolys, screenToWorld, size.height, size.width]);
 
   const onMiniMapClick = (event: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
     if (!Number.isFinite(miniMap.scale) || miniMap.scale <= 0) {
@@ -1073,7 +1071,7 @@ export function PolylineEditor() {
                 className="cursor-pointer"
               >
                 <rect x={0} y={0} width={miniMap.width} height={miniMap.height} fill={theme === 'dark' ? '#0B0C10' : '#f7f7f7'} />
-                {displayPolys.map((poly) => {
+                {visiblePolys.map((poly) => {
                   const points = poly.vertices.map((vertex) => {
                     const p = miniMap.mapPoint(projectVertex(vertex));
                     return `${p.x},${p.y}`;
@@ -1128,7 +1126,7 @@ export function PolylineEditor() {
 
             <div className="border-4 border-black bg-[#D9F99D] p-3 dark:border-white dark:bg-[#14532D]">
               <p className="text-xs uppercase tracking-wide opacity-70">Status Bar</p>
-              <p className="mt-2 text-sm font-semibold">Polylines: {polys.length} / {MAX_POLYLINES}</p>
+              <p className="mt-2 text-sm font-semibold">Polylines: {visiblePolys.length} / {MAX_POLYLINES}</p>
               <p className="text-sm font-semibold">Selected Polyline Vertices: {selectedVertexCount}</p>
               <p className="text-sm font-semibold">History: {past.length} undo / {future.length} redo</p>
               <p className="text-sm font-semibold">Zoom: {Math.round(camera.scale * 100)}%</p>
